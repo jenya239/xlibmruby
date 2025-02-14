@@ -1,0 +1,574 @@
+---- core/container.cpp ----
+#include "core/container.hpp"
+// Empty implementation file as all methods are templated in header
+
+---- core/container.hpp ----
+#pragma once
+#include <unordered_map>
+#include <functional>
+#include <memory>
+#include <typeindex>
+#include <any>
+#include <stdexcept>
+#include <string>
+
+class Container {
+public:
+    template<typename T>
+    void register_singleton(std::function<std::shared_ptr<T>()> factory) {
+        services[std::type_index(typeid(T))] = factory;
+    }
+
+    template<typename T>
+    std::shared_ptr<T> resolve() {
+        auto it = services.find(std::type_index(typeid(T)));
+        if (it != services.end()) {
+            return std::any_cast<std::shared_ptr<T>>(it->second());
+        }
+        throw std::runtime_error(std::string("Service not registered: ") + typeid(T).name());
+    }
+
+private:
+    std::unordered_map<std::type_index, std::function<std::any()>> services;
+};
+
+---- gui/label.cpp ----
+#include "label.hpp"
+#include <X11/Xft/Xft.h>
+#include <stdexcept>
+
+Label::Label(Display* display,
+			 Window window,
+			 int x,
+			 int y,
+			 int width,
+			 int height,
+			 const std::string& text,
+			 const std::string& fontName,
+			 const std::string& colorStr)
+	: VisibleComponent(display, window, nullptr, width, height)
+	, x_(x)
+	, y_(y)
+	, text_(text)
+	, font_(nullptr)
+{
+	int screen = DefaultScreen(display);
+
+	// Загружаем шрифт с помощью Xft
+	font_ = XftFontOpenName(display, screen, fontName.c_str());
+	if (!font_) {
+		throw std::runtime_error("Не удалось загрузить шрифт: " + fontName);
+	}
+
+	// Выделяем цвет с помощью Xft
+	if (!XftColorAllocName(display,
+						   DefaultVisual(display, screen),
+						   DefaultColormap(display, screen),
+						   colorStr.c_str(),
+						   &color_))
+	{
+		XftFontClose(display, font_);
+		throw std::runtime_error("Не удалось выделить цвет: " + colorStr);
+	}
+}
+
+Label::~Label() {
+	int screen = DefaultScreen(display_);
+	XftColorFree(display_,
+				 DefaultVisual(display_, screen),
+				 DefaultColormap(display_, screen),
+				 &color_);
+	if (font_) {
+		XftFontClose(display_, font_);
+	}
+}
+
+void Label::draw(Drawable drawable) {
+	int screen = DefaultScreen(display_);
+	// Создаем XftDraw для данного drawable (это может быть offscreen-пиксмап или окно)
+	XftDraw* xftDraw = XftDrawCreate(display_,
+									 drawable,
+									 DefaultVisual(display_, screen),
+									 DefaultColormap(display_, screen));
+	if (!xftDraw)
+		return;
+
+	// Рисуем текст. Координата y задается как baseline.
+	XftDrawStringUtf8(xftDraw,
+						&color_,
+						font_,
+						x_,
+						y_,
+						reinterpret_cast<const FcChar8*>(text_.c_str()),
+						static_cast<int>(text_.size()));
+
+	if (selection_start >= 0 && selection_end > selection_start) {
+		XSetForeground(display_, gc_, 0xAAAAAA); // Серый цвет выделения
+		XFillRectangle(display_, window_, gc_, selection_start, y_ - 12, 
+					   selection_end - selection_start, 15);
+	}
+
+	XftDrawDestroy(xftDraw);
+}
+
+void Label::handleEvent(XEvent& event) {
+	if (event.type == ButtonPress && event.xbutton.button == Button1) {
+		selecting = true;
+		selection_start = event.xbutton.x;
+		selection_end = selection_start;
+	}
+	else if (event.type == MotionNotify && selecting) {
+		selection_end = event.xmotion.x;
+	}
+	else if (event.type == ButtonRelease && selecting) {
+		selecting = false;
+	}
+}
+
+---- gui/label.hpp ----
+#pragma once
+
+#include "visible_component.hpp"
+#include <string>
+#include <X11/Xft/Xft.h>
+
+class Label : public VisibleComponent {
+public:
+	/**
+	 * Конструктор Label.
+	 *
+	 * @param display   Дисплей X11.
+	 * @param window    Окно, в котором будет отображаться виджет.
+	 * @param x         Координата X для вывода текста.
+	 * @param y         Координата Y для вывода текста (baseline).
+	 * @param width     Ширина виджета.
+	 * @param height    Высота виджета.
+	 * @param text      Текст для отображения.
+	 * @param fontName  Имя шрифта для Xft (например, "sans-12"). По умолчанию "sans-12".
+	 * @param colorStr  Строковое представление цвета (например, "#000000"). По умолчанию черный.
+	 */
+	Label(Display* display,
+		  Window window,
+		  int x,
+		  int y,
+		  int width,
+		  int height,
+		  const std::string& text,
+		  const std::string& fontName = "sans-12",
+		  const std::string& colorStr = "#000000");
+
+	~Label();
+
+	// Метод отрисовки на заданном drawable (например, на offscreen-буфере)
+	void draw(Drawable drawable) override;
+
+	void setText(const std::string& text) { text_ = text; }
+
+	// Добавляем флаги для выделения
+	bool selecting = false;
+	int selection_start = -1;
+	int selection_end = -1;
+
+	void handleEvent(XEvent& event);
+	
+private:
+	int x_, y_;
+	std::string text_;
+
+	// Xft-объекты для работы с шрифтом и цветом
+	XftFont* font_;
+	XftColor color_;
+};
+
+---- gui/visible_component.hpp ----
+// src/gui/visible_component.hpp
+#pragma once
+#include <X11/Xlib.h>
+
+class VisibleComponent {
+public:
+	VisibleComponent(Display* display, Window window, GC gc, int width, int height)
+		: display_(display), window_(window), gc_(gc), width_(width), height_(height) {}
+	virtual ~VisibleComponent() = default;
+
+	// Метод отрисовки на заданном drawable (например, на буфере)
+	virtual void draw(Drawable drawable) = 0;
+	virtual void handleEvent(XEvent& event) = 0; // Должен быть чисто виртуальным
+
+protected:
+	Display* display_;
+	Window window_;
+	GC gc_;
+	int width_, height_;
+};
+
+---- interfaces/iruby_service.hpp ----
+#pragma once
+#include <string>
+
+class IRubyService {
+public:
+	virtual ~IRubyService() = default;
+	virtual std::string execute_code(const std::string& code) = 0;
+	virtual std::string load_file(const std::string& filename) = 0;
+};
+
+---- interfaces/iwindow_service.hpp ----
+#pragma once
+
+class IWindowService {
+public:
+	virtual ~IWindowService() = default;
+	virtual void run() = 0;
+};
+
+---- main.cpp ----
+#include "core/container.hpp"
+#include "modules/app_module.hpp"
+#include "interfaces/iwindow_service.hpp"
+#include <iostream>
+
+int main() {
+	try {
+		Container container;
+		AppModule::configure(container);
+		
+		auto window_service = container.resolve<IWindowService>();
+		window_service->run();
+		
+		return 0;
+	} catch (const std::exception& e) {
+		std::cerr << "Error: " << e.what() << std::endl;
+		return 1;
+	}
+}
+
+---- modules/app_module.cpp ----
+#include "modules/app_module.hpp"
+#include "services/ruby_service.hpp"
+#include "services/window_service.hpp"
+#include "gui/label.hpp"
+
+void AppModule::configure(Container& container) {
+	container.register_singleton<IRubyService>([]() {
+		return std::make_shared<RubyService>();
+	});
+
+	container.register_singleton<IWindowService>([&container]() {
+		auto ws = std::make_shared<WindowService>(container.resolve<IRubyService>());
+
+		auto input = new Label(ws->getDisplay(), ws->getWindow(),
+							   10, 30, 300, 20, "Введите код Ruby...", "monospace-10", "#004400");
+		ws->setInputLabel(input);
+
+		auto result = new Label(ws->getDisplay(), ws->getWindow(),
+								10, 60, 300, 20, "Результат", "monospace-10", "#004400");
+		ws->setResultLabel(result);
+
+		auto test_lbl = new Label(ws->getDisplay(), ws->getWindow(),
+								100, 90, 300, 20, "test", "arial-14", "#994400");
+		ws->addWidget(test_lbl);
+
+		return ws;
+	});
+}
+
+---- modules/app_module.hpp ----
+#pragma once
+#include "core/container.hpp"
+
+class AppModule {
+public:
+	static void configure(Container& container);
+};
+
+---- services/ruby_service.cpp ----
+#include "services/ruby_service.hpp"
+#include <mruby/compile.h>
+#include <mruby/string.h>
+#include <stdexcept>
+
+RubyService::RubyService() : mrb(mrb_open()) {
+	if (!mrb) throw std::runtime_error("Failed to initialize mruby");
+}
+
+RubyService::~RubyService() {
+	if (mrb) mrb_close(mrb);
+}
+
+std::string RubyService::execute_code(const std::string& code) {
+	mrb_value result = mrb_load_string(mrb, code.c_str());
+	if (mrb->exc) {
+		auto error = handle_error();
+		mrb->exc = nullptr;
+		return "Error: " + error;
+	}
+	return mrb_str_to_cstr(mrb, mrb_funcall(mrb, result, "inspect", 0));
+}
+
+std::string RubyService::load_file(const std::string& filename) {
+	FILE* file = fopen(filename.c_str(), "r");
+	if (!file) throw std::runtime_error("Failed to open " + filename);
+	mrb_value result = mrb_load_file(mrb, file);
+	fclose(file);
+	return mrb_str_to_cstr(mrb, result);
+}
+
+std::string RubyService::handle_error() {
+	mrb_value exc = mrb_obj_value(mrb->exc);
+	mrb_value msg = mrb_funcall(mrb, exc, "inspect", 0);
+	return mrb_str_to_cstr(mrb, msg);
+}
+
+---- services/ruby_service.hpp ----
+#pragma once
+#include "interfaces/iruby_service.hpp"
+#include <mruby.h>
+
+class RubyService : public IRubyService {
+public:
+	RubyService();
+	~RubyService() override;
+
+	std::string execute_code(const std::string& code) override;
+	std::string load_file(const std::string& filename) override;
+
+private:
+	mrb_state* mrb;
+	std::string handle_error();
+};
+
+---- services/window_service.cpp ----
+#include "services/window_service.hpp"
+#include <X11/Xutil.h>
+#include <X11/Xft/Xft.h>
+#include <stdexcept>
+
+WindowService::WindowService(std::shared_ptr<IRubyService> ruby_service) 
+	: ruby_service(ruby_service),
+		display(XOpenDisplay("")),
+		screen(DefaultScreen(display.get())),
+		text_buffer(256, '\0'),
+		text_length(0) {
+	
+	if (!display) throw std::runtime_error("Failed to open display");
+	
+	create_window();
+	setup_gc();
+	setup_xft();
+	XSelectInput(display.get(), window, 
+				ButtonPressMask | KeyPressMask | ExposureMask | PointerMotionMask | ButtonReleaseMask);
+	XMapRaised(display.get(), window);
+}
+
+void WindowService::run() {
+	std::string ruby_output = ruby_service->load_file("scripts/hello.rb");
+	main_loop(ruby_output);
+}
+
+void WindowService::create_window() {
+	XSizeHints hints;
+	hints.x = 200;
+	hints.y = 300;
+	hints.width = 350;
+	hints.height = 250;
+	hints.flags = PPosition | PSize;
+
+	window = XCreateSimpleWindow(display.get(), 
+								DefaultRootWindow(display.get()),
+								hints.x, hints.y, hints.width, hints.height,
+								5,
+								BlackPixel(display.get(), screen),
+								WhitePixel(display.get(), screen));
+
+	XSetStandardProperties(display.get(), window, "X11 Window2", "X11 Window2",
+						 None, nullptr, 0, &hints);
+}
+
+void WindowService::setup_gc() {
+	gc = XCreateGC(display.get(), window, 0, nullptr);
+	XSetBackground(display.get(), gc, WhitePixel(display.get(), screen));
+	XSetForeground(display.get(), gc, BlackPixel(display.get(), screen));
+}
+
+void WindowService::setup_xft() {
+	visual = DefaultVisual(display.get(), screen);
+	colormap = DefaultColormap(display.get(), screen);
+	font = XftFontOpenName(display.get(), screen, "monospace-10");
+	if (!font) throw std::runtime_error("Failed to load font");
+	color = new XftColor;
+	XftColorAllocName(display.get(), visual, colormap, "black", color);
+	draw = XftDrawCreate(display.get(), window, visual, colormap);
+}
+
+void WindowService::main_loop(std::string& ruby_output) {
+	bool done = false;
+	while (!done) {
+		XEvent event;
+		XNextEvent(display.get(), &event);
+		
+		for (auto widget : widgets) {
+			widget->handleEvent(event);
+		}
+		
+		switch (event.type) {
+			case Expose:
+				if (event.xexpose.count == 0) redraw(ruby_output);
+				break;
+			case KeyPress:
+				done = handle_key_press(event, ruby_output);
+				break;
+			case ButtonPress:
+			case MotionNotify:
+				draw_at_pointer(event);
+				break;
+			case MappingNotify:
+				XRefreshKeyboardMapping(&event.xmapping);
+				break;
+		}
+	}
+}
+
+void WindowService::redraw(const std::string& ruby_output) {
+	// Перед отрисовкой обновляем текст меток, если они заданы
+	if (inputLabel)
+		inputLabel->setText(text_buffer.substr(0, text_length));
+	if (resultLabel)
+		resultLabel->setText(ruby_output);
+
+	// Используем размеры окна, как задано в create_window (350x250)
+	int win_width = 350;
+	int win_height = 250;
+	
+	// Создаем offscreen-пиксмап для двойной буферизации
+	Pixmap buffer = XCreatePixmap(display.get(), window, win_width, win_height, DefaultDepth(display.get(), screen));
+	
+	// Заполняем фон белым
+	XSetForeground(display.get(), gc, WhitePixel(display.get(), screen));
+	XFillRectangle(display.get(), buffer, gc, 0, 0, win_width, win_height);
+	
+	for (auto widget : widgets) {
+		widget->draw(buffer);
+	}
+	
+	// Копируем буфер в окно
+	XCopyArea(display.get(), buffer, window, gc, 0, 0, win_width, win_height, 0, 0);
+	XFreePixmap(display.get(), buffer);
+	XFlush(display.get());
+}
+
+bool WindowService::handle_key_press(XEvent& event, std::string& ruby_output) {
+	char buf[32] = {0};
+	KeySym key;
+	int len = XLookupString(&event.xkey, buf, sizeof(buf), &key, nullptr);
+
+	if (len > 0) {
+		if (key == XK_q) return true;
+		if (key == XK_BackSpace && text_length > 0) {
+			text_buffer[--text_length] = '\0';
+		}
+		else if (key == XK_Return) {
+			ruby_output = ruby_service->execute_code(text_buffer.substr(0, text_length));
+		}
+		else if (text_length + len < text_buffer.size()) {
+			text_buffer.replace(text_length, len, buf, len);
+			text_length += len;
+		}
+		redraw(ruby_output);
+	}
+	return false;
+}
+
+void WindowService::draw_at_pointer(const XEvent& event) {
+	// static const std::string hi = "hi!";
+	// int x = (event.type == ButtonPress) ? event.xbutton.x : event.xmotion.x;
+	// int y = (event.type == ButtonPress) ? event.xbutton.y : event.xmotion.y;
+	// XDrawImageString(display.get(), window, gc, x, y, hi.c_str(), hi.length());
+}
+
+// Метод для регистрации видимых компонентов (виджетов)
+void WindowService::addWidget(VisibleComponent* widget) {
+	widgets.push_back(widget);
+}
+
+Display* WindowService::getDisplay() const {
+	return display.get();
+}
+
+Window WindowService::getWindow() const {
+	return window;
+}
+
+// Методы для установки меток, регистрируя их как виджеты
+void WindowService::setInputLabel(Label* label) {
+	inputLabel = label;
+	addWidget(label);
+}
+
+void WindowService::setResultLabel(Label* label) {
+	resultLabel = label;
+	addWidget(label);
+}
+
+---- services/window_service.hpp ----
+#pragma once
+#include "interfaces/iwindow_service.hpp"
+#include "interfaces/iruby_service.hpp"
+#include <X11/Xlib.h>
+#include <X11/Xft/Xft.h>
+#include <memory>
+#include <string>
+#include <vector>
+#include "../gui/visible_component.hpp"
+#include "../gui/label.hpp" // Для использования Label
+
+class WindowService : public IWindowService {
+public:
+	WindowService(std::shared_ptr<IRubyService> ruby_service);
+	void run() override;
+
+	Display* getDisplay() const;
+	Window getWindow() const;
+
+	// Метод для регистрации видимых компонентов (виджетов)
+	void addWidget(VisibleComponent* widget);
+
+	// Новые методы для установки меток ввода и вывода Ruby-результата
+	void setInputLabel(Label* label);
+	void setResultLabel(Label* label);
+
+private:
+	struct DisplayDeleter {
+		void operator()(Display* d) { if (d) XCloseDisplay(d); }
+	};
+	
+	std::shared_ptr<IRubyService> ruby_service;
+	std::unique_ptr<Display, DisplayDeleter> display;
+	Window window;
+	GC gc;
+	int screen;
+	std::string text_buffer;
+	size_t text_length;
+
+	Visual* visual;
+	Colormap colormap;
+	XftFont* font;
+	XftColor* color;
+	XftDraw* draw;
+
+	// Контейнер для видимых компонентов (виджетов)
+	std::vector<VisibleComponent*> widgets;
+
+	// Метки для ввода и для вывода Ruby-результата
+	Label* inputLabel = nullptr;
+	Label* resultLabel = nullptr;
+
+	void create_window();
+	void setup_gc();
+	void setup_xft();
+	void main_loop(std::string& ruby_output);
+	void redraw(const std::string& ruby_output);
+	bool handle_key_press(XEvent& event, std::string& ruby_output);
+	void draw_at_pointer(const XEvent& event);
+};
+

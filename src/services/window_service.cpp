@@ -16,7 +16,7 @@ WindowService::WindowService(std::shared_ptr<IRubyService> ruby_service)
 	setup_gc();
 	setup_xft();
 	XSelectInput(display.get(), window, 
-				ButtonPressMask | KeyPressMask | ExposureMask | PointerMotionMask);
+				ButtonPressMask | KeyPressMask | ExposureMask | PointerMotionMask | ButtonReleaseMask);
 	XMapRaised(display.get(), window);
 }
 
@@ -53,7 +53,7 @@ void WindowService::setup_gc() {
 void WindowService::setup_xft() {
 	visual = DefaultVisual(display.get(), screen);
 	colormap = DefaultColormap(display.get(), screen);
-	font = XftFontOpenName(display.get(), screen, "monospace-12");
+	font = XftFontOpenName(display.get(), screen, "monospace-10");
 	if (!font) throw std::runtime_error("Failed to load font");
 	color = new XftColor;
 	XftColorAllocName(display.get(), visual, colormap, "black", color);
@@ -65,6 +65,10 @@ void WindowService::main_loop(std::string& ruby_output) {
 	while (!done) {
 		XEvent event;
 		XNextEvent(display.get(), &event);
+		
+		for (auto widget : widgets) {
+			widget->handleEvent(event);
+		}
 		
 		switch (event.type) {
 			case Expose:
@@ -85,11 +89,31 @@ void WindowService::main_loop(std::string& ruby_output) {
 }
 
 void WindowService::redraw(const std::string& ruby_output) {
-	XClearWindow(display.get(), window);
-	XftDrawString8(draw, color, font, 10, 50, 
-				 (XftChar8*)text_buffer.c_str(), text_length);
-	XftDrawString8(draw, color, font, 10, 70, 
-				 (XftChar8*)ruby_output.c_str(), ruby_output.length());
+	// Перед отрисовкой обновляем текст меток, если они заданы
+	if (inputLabel)
+		inputLabel->setText(text_buffer.substr(0, text_length));
+	if (resultLabel)
+		resultLabel->setText(ruby_output);
+
+	// Используем размеры окна, как задано в create_window (350x250)
+	int win_width = 350;
+	int win_height = 250;
+	
+	// Создаем offscreen-пиксмап для двойной буферизации
+	Pixmap buffer = XCreatePixmap(display.get(), window, win_width, win_height, DefaultDepth(display.get(), screen));
+	
+	// Заполняем фон белым
+	XSetForeground(display.get(), gc, WhitePixel(display.get(), screen));
+	XFillRectangle(display.get(), buffer, gc, 0, 0, win_width, win_height);
+	
+	for (auto widget : widgets) {
+		widget->draw(buffer);
+	}
+	
+	// Копируем буфер в окно
+	XCopyArea(display.get(), buffer, window, gc, 0, 0, win_width, win_height, 0, 0);
+	XFreePixmap(display.get(), buffer);
+	XFlush(display.get());
 }
 
 bool WindowService::handle_key_press(XEvent& event, std::string& ruby_output) {
@@ -115,8 +139,32 @@ bool WindowService::handle_key_press(XEvent& event, std::string& ruby_output) {
 }
 
 void WindowService::draw_at_pointer(const XEvent& event) {
-	static const std::string hi = "hi!";
-	int x = (event.type == ButtonPress) ? event.xbutton.x : event.xmotion.x;
-	int y = (event.type == ButtonPress) ? event.xbutton.y : event.xmotion.y;
-	XDrawImageString(display.get(), window, gc, x, y, hi.c_str(), hi.length());
+	// static const std::string hi = "hi!";
+	// int x = (event.type == ButtonPress) ? event.xbutton.x : event.xmotion.x;
+	// int y = (event.type == ButtonPress) ? event.xbutton.y : event.xmotion.y;
+	// XDrawImageString(display.get(), window, gc, x, y, hi.c_str(), hi.length());
+}
+
+// Метод для регистрации видимых компонентов (виджетов)
+void WindowService::addWidget(VisibleComponent* widget) {
+	widgets.push_back(widget);
+}
+
+Display* WindowService::getDisplay() const {
+	return display.get();
+}
+
+Window WindowService::getWindow() const {
+	return window;
+}
+
+// Методы для установки меток, регистрируя их как виджеты
+void WindowService::setInputLabel(Label* label) {
+	inputLabel = label;
+	addWidget(label);
+}
+
+void WindowService::setResultLabel(Label* label) {
+	resultLabel = label;
+	addWidget(label);
 }
