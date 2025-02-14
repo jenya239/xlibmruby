@@ -1,3 +1,0 @@
-/home/jenya/workspaces/mruby2/space/build/CMakeFiles/modernx.dir
-/home/jenya/workspaces/mruby2/space/build/CMakeFiles/edit_cache.dir
-/home/jenya/workspaces/mruby2/space/build/CMakeFiles/rebuild_cache.dir
