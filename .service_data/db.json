@@ -1,0 +1,57 @@
+{
+  "src/core/container.cpp": {
+    "modified_time": "2025-02-13 10:10:37 +0400",
+    "hash": "0105aaed813cc2d4f25b13b5259304bb3e7b63a7024f840564bd62f9412f0690",
+    "description": "Файл `container.cpp` содержит пустую реализацию, так как все методы шаблонные и определены в заголовочном файле."
+  },
+  "src/core/container.hpp": {
+    "modified_time": "2025-02-13 10:18:44 +0400",
+    "hash": "c1e52fa7a4ad2e7142a1426631a4dde61ac458e4e4adffa61f18b730e035f261",
+    "description": "Файл `container.hpp` содержит класс `Container`, который предоставляет функционал для регистрации и разрешения синглтонов. Класс содержит методы `register_singleton` для регистрации синглтона и `resolve` для получения экземпляра синглтона по типу. Логика работы заключается в хранении фабричных функций для создания синглтонов и их последующем вызове при разрешении. В случае отсутствия зарегистрированного сервиса генерируется исключение."
+  },
+  "src/interfaces/iruby_service.hpp": {
+    "modified_time": "2025-02-13 04:40:54 +0400",
+    "hash": "a7c093bfe30839106af8edd471d63fada267e8b61fa88d91837ca95e7e60c575",
+    "description": "Файл `iruby_service.hpp` содержит интерфейс `IRubyService` с чисто виртуальными функциями `execute_code` и `load_file`, которые выполняют код и загружают файл соответственно."
+  },
+  "src/interfaces/iwindow_service.hpp": {
+    "modified_time": "2025-02-13 04:41:13 +0400",
+    "hash": "fdec957bfb64b336364248e88f43d8684e59c1f0a1d4e3f8d06d332f6cd89f05",
+    "description": "Файл `iwindow_service.hpp` содержит интерфейс `IWindowService` с методами:\n- `run()`: абстрактный метод без реализации.\nИнтерфейс предназначен для работы с окнами и несет обязанность запуска окна."
+  },
+  "src/main.cpp": {
+    "modified_time": "2025-02-13 04:49:00 +0400",
+    "hash": "8dae84b79bfcdec0606b11ee44804fc65f3a34d775d772dc43a00ef2a7948d25",
+    "description": "Файл `main.cpp` содержит функцию `main`, которая создает объект `Container`, вызывает метод `configure` класса `AppModule` для конфигурации контейнера, затем получает сервис окон из контейнера и запускает его. В случае исключения выводит сообщение об ошибке."
+  },
+  "src/modules/app_module.cpp": {
+    "modified_time": "2025-02-13 04:48:10 +0400",
+    "hash": "2297447f0c21ced56ca35cda2e3978135550fcb5a64eef8123d83e8b9f3de5df",
+    "description": "Файл src/modules/app_module.cpp содержит реализацию класса AppModule. В методе configure происходит регистрация синглтонов IRubyService и IWindowService в контейнере. IRubyService создается с помощью RubyService, а IWindowService — с использованием WindowService и IRubyService из контейнера."
+  },
+  "src/modules/app_module.hpp": {
+    "modified_time": "2025-02-13 04:47:39 +0400",
+    "hash": "38b5cdbad101341d87441714f54b0cac160f9b5f2a793c512fac4ffd34a9887b",
+    "description": "Файл `app_module.hpp` содержит класс `AppModule` с одной статической функцией `configure`, которая принимает объект `Container` и выполняет конфигурацию."
+  },
+  "src/services/ruby_service.cpp": {
+    "modified_time": "2025-02-13 04:46:04 +0400",
+    "hash": "b62ed6428ef8dc223b59d2355e3650d53a8af2f2902e5c567a79d94f9bdf4d71",
+    "description": "Файл `ruby_service.cpp` содержит класс `RubyService`, который предоставляет функциональность выполнения Ruby-кода. В конструкторе и деструкторе инициализируется и закрывается интерпретатор mruby. Метод `execute_code` выполняет переданный код, обрабатывает ошибки и возвращает результат выполнения. Метод `load_file` загружает код из файла и возвращает результат выполнения. Метод `handle_error` обрабатывает ошибки и возвращает сообщение об ошибке в виде строки."
+  },
+  "src/services/ruby_service.hpp": {
+    "modified_time": "2025-02-13 04:45:34 +0400",
+    "hash": "e4bcf0c44252b4d8668db874146ce241122d2db2d4e471729d3663d6510d980e",
+    "description": "Файл `ruby_service.hpp` содержит класс `RubyService`, который реализует интерфейс `IRubyService`. В классе определены конструктор, деструктор, методы `execute_code` и `load_file` для выполнения кода и загрузки файла на языке Ruby. Также есть приватное поле `mrb` типа `mrb_state*` для работы с интерпретатором Ruby и метод `handle_error` для обработки ошибок."
+  },
+  "src/services/window_service.cpp": {
+    "modified_time": "2025-02-13 16:22:40 +0400",
+    "hash": "fa5ad580bc546bf89c57587cb6f4a9178e2924f0037893a8d80839d7e2f0c63b",
+    "description": "Файл window_service.cpp содержит класс WindowService, который управляет окном X11. В конструкторе инициализируется дисплей, создается окно, настраивается графический контекст и устанавливаются обработчики событий. Метод run загружает Ruby-скрипт и запускает основной цикл обработки событий. Методы create_window и setup_gc создают окно и настраивают графический контекст соответственно. Метод main_loop обрабатывает события Expose, KeyPress, ButtonPress, MotionNotify и MappingNotify. Методы redraw, handle_key_press и draw_at_pointer отвечают за перерисовку окна, обработку нажатий клавиш и рисование текста по координатам указателя мыши."
+  },
+  "src/services/window_service.hpp": {
+    "modified_time": "2025-02-13 04:46:33 +0400",
+    "hash": "42b2b9fe188554ca7f99ad7c14e89ee2657675a7c539027e5dac4e6f0512d7e2",
+    "description": "Файл `window_service.hpp` содержит класс `WindowService`, который реализует интерфейс `IWindowService`. В конструкторе принимается объект `ruby_service` типа `IRubyService`. Класс управляет окном X11, использует объекты `Display`, `Window`, `GC` для отрисовки текста и обработки событий клавиатуры. Метод `run` запускает основной цикл работы, в котором происходит отрисовка текста и обработка событий."
+  }
+}

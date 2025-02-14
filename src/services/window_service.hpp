@@ -2,6 +2,7 @@
 #include "interfaces/iwindow_service.hpp"
 #include "interfaces/iruby_service.hpp"
 #include <X11/Xlib.h>
+#include <X11/Xft/Xft.h>
 #include <memory>
 #include <string>
 
@@ -23,8 +24,15 @@ private:
 	std::string text_buffer;
 	size_t text_length;
 
+	Visual* visual;
+	Colormap colormap;
+	XftFont* font;
+	XftColor* color;
+	XftDraw* draw;
+
 	void create_window();
 	void setup_gc();
+	void setup_xft();
 	void main_loop(std::string& ruby_output);
 	void redraw(const std::string& ruby_output);
 	bool handle_key_press(XEvent& event, std::string& ruby_output);
