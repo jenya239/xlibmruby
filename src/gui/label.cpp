@@ -1,91 +1,80 @@
 #include "label.hpp"
 #include <X11/Xft/Xft.h>
 #include <stdexcept>
+#include <iostream>
 
 Label::Label(Display* display,
-			 Window window,
-			 int x,
-			 int y,
-			 int width,
-			 int height,
-			 const std::string& text,
-			 const std::string& fontName,
-			 const std::string& colorStr)
-	: VisibleComponent(display, window, nullptr, width, height)
-	, x_(x)
-	, y_(y)
-	, text_(text)
-	, font_(nullptr)
+             Window window,
+             GC gc, // Добавлен параметр GC
+             int x,
+             int y,
+             int width,
+             int height,
+             const std::string& text,
+             const std::string& fontName,
+             const std::string& colorStr)
+    : VisibleComponent(display, window, gc, width, height), // Передача GC
+      x_(x),
+      y_(y),
+      text_(text),
+      font_(nullptr, XftFontDeleter{ display })
 {
-	int screen = DefaultScreen(display);
+    int screen = DefaultScreen(display);
 
-	// Загружаем шрифт с помощью Xft
-	font_ = XftFontOpenName(display, screen, fontName.c_str());
-	if (!font_) {
-		throw std::runtime_error("Не удалось загрузить шрифт: " + fontName);
-	}
+    // Load font using Xft with RAII
+    XftFont* raw_font = XftFontOpenName(display, screen, fontName.c_str());
+    if (!raw_font) {
+        throw std::runtime_error("Failed to load font: " + fontName);
+    }
+    font_.reset(raw_font);
+    std::cout << "Loaded font: " << fontName << std::endl;
 
-	// Выделяем цвет с помощью Xft
-	if (!XftColorAllocName(display,
-						   DefaultVisual(display, screen),
-						   DefaultColormap(display, screen),
-						   colorStr.c_str(),
-						   &color_))
-	{
-		XftFontClose(display, font_);
-		throw std::runtime_error("Не удалось выделить цвет: " + colorStr);
-	}
+    // Allocate color using Xft
+    if (!XftColorAllocName(display,
+                           DefaultVisual(display, screen),
+                           DefaultColormap(display, screen),
+                           colorStr.c_str(),
+                           &color_))
+    {
+        std::cerr << "Failed to allocate color: " << colorStr << std::endl;
+        throw std::runtime_error("Failed to allocate color: " + colorStr);
+    }
+    std::cout << "Allocated color: " << colorStr << std::endl;
 }
 
 Label::~Label() {
-	int screen = DefaultScreen(display_);
-	XftColorFree(display_,
-				 DefaultVisual(display_, screen),
-				 DefaultColormap(display_, screen),
-				 &color_);
-	if (font_) {
-		XftFontClose(display_, font_);
-	}
+    int screen = DefaultScreen(display_);
+    XftColorFree(display_,
+                DefaultVisual(display_, screen),
+                DefaultColormap(display_, screen),
+                &color_);
+    std::cout << "Freed color resources for Label." << std::endl;
+    // XftFont is automatically closed by unique_ptr
 }
 
 void Label::draw(Drawable drawable) {
-	int screen = DefaultScreen(display_);
-	// Создаем XftDraw для данного drawable (это может быть offscreen-пиксмап или окно)
-	XftDraw* xftDraw = XftDrawCreate(display_,
-									 drawable,
-									 DefaultVisual(display_, screen),
-									 DefaultColormap(display_, screen));
-	if (!xftDraw)
-		return;
+    int screen = DefaultScreen(display_);
 
-	// Рисуем текст. Координата y задается как baseline.
-	XftDrawStringUtf8(xftDraw,
-						&color_,
-						font_,
-						x_,
-						y_,
-						reinterpret_cast<const FcChar8*>(text_.c_str()),
-						static_cast<int>(text_.size()));
+    XftDrawPtr xftDraw(XftDrawCreate(display_,
+                                     drawable, // Используем переданный drawable
+                                     DefaultVisual(display_, screen),
+                                     DefaultColormap(display_, screen)),
+                       XftDrawDeleter());
 
-	if (selection_start >= 0 && selection_end > selection_start) {
-		XSetForeground(display_, gc_, 0xAAAAAA); // Серый цвет выделения
-		XFillRectangle(display_, window_, gc_, selection_start, y_ - 12, 
-					   selection_end - selection_start, 15);
-	}
+    if (!xftDraw) {
+        std::cerr << "Failed to create XftDraw in Label::draw." << std::endl;
+        return;
+    }
 
-	XftDrawDestroy(xftDraw);
+    XftDrawStringUtf8(xftDraw.get(),
+                      &color_,
+                      font_.get(),
+                      x_,
+                      y_,
+                      reinterpret_cast<const FcChar8*>(text_.c_str()),
+                      static_cast<int>(text_.size()));
+    std::cout << "Drawing label text: " << text_ << std::endl;
 }
 
 void Label::handleEvent(XEvent& event) {
-	if (event.type == ButtonPress && event.xbutton.button == Button1) {
-		selecting = true;
-		selection_start = event.xbutton.x;
-		selection_end = selection_start;
-	}
-	else if (event.type == MotionNotify && selecting) {
-		selection_end = event.xmotion.x;
-	}
-	else if (event.type == ButtonRelease && selecting) {
-		selecting = false;
-	}
 }

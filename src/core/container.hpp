@@ -11,7 +11,9 @@ class Container {
 public:
     template<typename T>
     void register_singleton(std::function<std::shared_ptr<T>()> factory) {
-        services[std::type_index(typeid(T))] = factory;
+        services[std::type_index(typeid(T))] = [factory]() -> std::any {
+            return factory();
+        };
     }
 
     template<typename T>

@@ -1,7 +1,7 @@
 #pragma once
-#include "core/container.hpp"
+#include "../core/container.hpp"
 
 class AppModule {
 public:
-	static void configure(Container& container);
+    static void configure(Container& container);
 };
