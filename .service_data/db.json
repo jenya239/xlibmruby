@@ -25,9 +25,9 @@
     "description": "Файл `main.cpp` содержит функцию `main`, которая создает объект `Container`, вызывает метод `configure` класса `AppModule` для конфигурации контейнера, затем получает сервис окон из контейнера и запускает его. В случае исключения выводит сообщение об ошибке."
   },
   "src/modules/app_module.cpp": {
-    "modified_time": "2025-02-13 04:48:10 +0400",
-    "hash": "2297447f0c21ced56ca35cda2e3978135550fcb5a64eef8123d83e8b9f3de5df",
-    "description": "Файл src/modules/app_module.cpp содержит реализацию класса AppModule. В методе configure происходит регистрация синглтонов IRubyService и IWindowService в контейнере. IRubyService создается с помощью RubyService, а IWindowService — с использованием WindowService и IRubyService из контейнера."
+    "modified_time": "2025-02-16 16:17:40 +0400",
+    "hash": "6ea51b114e8efe8cedaa3cffc8229b990bfd889c557d73b5052a428c50524c5b",
+    "description": "Файл `app_module.cpp` содержит реализацию метода `configure` класса `AppModule`. В методе происходит регистрация синглтонов `IRubyService` и `IWindowService` в контейнере. Для `IRubyService` создается экземпляр `RubyService`, а для `IWindowService` создается экземпляр `WindowService`, которому передается экземпляр `IRubyService`. Затем создаются два объекта `Label` для отображения ввода и результата на окне, и устанавливаются в `WindowService`."
   },
   "src/modules/app_module.hpp": {
     "modified_time": "2025-02-13 04:47:39 +0400",
@@ -45,13 +45,38 @@
     "description": "Файл `ruby_service.hpp` содержит класс `RubyService`, который реализует интерфейс `IRubyService`. В классе определены конструктор, деструктор, методы `execute_code` и `load_file` для выполнения кода и загрузки файла на языке Ruby. Также есть приватное поле `mrb` типа `mrb_state*` для работы с интерпретатором Ruby и метод `handle_error` для обработки ошибок."
   },
   "src/services/window_service.cpp": {
-    "modified_time": "2025-02-13 16:22:40 +0400",
-    "hash": "fa5ad580bc546bf89c57587cb6f4a9178e2924f0037893a8d80839d7e2f0c63b",
-    "description": "Файл window_service.cpp содержит класс WindowService, который управляет окном X11. В конструкторе инициализируется дисплей, создается окно, настраивается графический контекст и устанавливаются обработчики событий. Метод run загружает Ruby-скрипт и запускает основной цикл обработки событий. Методы create_window и setup_gc создают окно и настраивают графический контекст соответственно. Метод main_loop обрабатывает события Expose, KeyPress, ButtonPress, MotionNotify и MappingNotify. Методы redraw, handle_key_press и draw_at_pointer отвечают за перерисовку окна, обработку нажатий клавиш и рисование текста по координатам указателя мыши."
+    "modified_time": "2025-02-16 23:17:36 +0400",
+    "hash": "e0521a1049d3a4d6495290aa8841dddf6473c12ef827f67409b9959d8c28614e",
+    "description": "Файл window_service.cpp содержит класс WindowService, который управляет окном X11. Класс имеет конструктор, деструктор, методы create_window, setup_gc, setup_xft, main_loop, redraw, handle_key_press, draw_at_pointer, addWidget, setInputLabel, setResultLabel, getDisplay, getWindow. Конструктор инициализирует окно, графический контекст и Xft. Метод run загружает Ruby-скрипт и запускает главный цикл. Методы redraw и handle_key_press обновляют содержимое окна в ответ на события. Метод draw_at_pointer рисует текст \"hi!\" по координатам указателя. Методы setInputLabel и setResultLabel устанавливают метки и регистрируют их как виджеты."
   },
   "src/services/window_service.hpp": {
-    "modified_time": "2025-02-13 04:46:33 +0400",
-    "hash": "42b2b9fe188554ca7f99ad7c14e89ee2657675a7c539027e5dac4e6f0512d7e2",
-    "description": "Файл `window_service.hpp` содержит класс `WindowService`, который реализует интерфейс `IWindowService`. В конструкторе принимается объект `ruby_service` типа `IRubyService`. Класс управляет окном X11, использует объекты `Display`, `Window`, `GC` для отрисовки текста и обработки событий клавиатуры. Метод `run` запускает основной цикл работы, в котором происходит отрисовка текста и обработка событий."
+    "modified_time": "2025-02-16 23:18:20 +0400",
+    "hash": "2db269bf6bc779a5cf97e6985669a30e49f3244d9c96469e3221b52e0ca35b40",
+    "description": "Файл window_service.hpp содержит класс WindowService, который реализует интерфейс IWindowService. Класс предоставляет методы для работы с окном X11, включая создание окна, настройку графического контекста, обработку событий клавиатуры и отрисовку компонентов. Класс также содержит методы для управления видимыми компонентами (виджетами) и установки меток ввода и вывода Ruby-результата."
+  },
+  "src/gui/buffered_component.cpp": {
+    "modified_time": "2025-02-16 23:06:20 +0400",
+    "hash": "65e72b55e05311449e3716359e501024ed8f1936674945b3a3c5951ff83afd77",
+    "description": "Файл `buffered_component.cpp` содержит класс `BufferedComponent`, который является подклассом класса `VisibleComponent`. В конструкторе класса создается буферный pixmap с помощью функции `XCreatePixmap`. Метод `draw` отрисовывает содержимое буфера на указанном drawable, если флаг `needsRedraw_` установлен в true. Метод `invalidateBuffer` устанавливает флаг `needsRedraw_` в true, чтобы потребовать перерисовки. В деструкторе освобождается память, выделенная под буферный pixmap с помощью `XFreePixmap`."
+  },
+  "src/gui/buffered_component.hpp": {
+    "modified_time": "2025-02-16 23:05:50 +0400",
+    "hash": "0e657fd812dfb1164f98094f11954a4c2e18c7675981b49f1b7bd94af680fcec",
+    "description": "Файл `buffered_component.hpp` содержит класс `BufferedComponent`, который является наследником класса `VisibleComponent`. В конструкторе принимаются параметры `display`, `window`, `gc`, `width` и `height`. Класс имеет метод `draw`, который вызывает виртуальную функцию `drawOnBuffer` для рисования на внутреннем буфере. Также есть метод `invalidateBuffer`, который вызывается для обновления внутреннего буфера. Внутренний буфер представлен переменной `buffer_`, а флаг `needsRedraw_` указывает на необходимость перерисовки."
+  },
+  "src/gui/label.cpp": {
+    "modified_time": "2025-02-16 23:08:31 +0400",
+    "hash": "f26782e55c492f893bb61fcb9e0acf64a04bbf643f82997367f659c6528e35f9",
+    "description": "Файл `label.cpp` содержит класс `Label`, который представляет собой надпись с определенным текстом, шрифтом и цветом. Класс наследуется от `BufferedComponent` и имеет конструктор для инициализации параметров надписи, а также методы для отрисовки текста на буфере. В конструкторе происходит загрузка шрифта и выделение цвета, а также создание GC для очистки буфера. Метод `drawOnBuffer` очищает буфер, рисует текст с заданным шрифтом и цветом, используя Xft. В деструкторе освобождаются ресурсы, такие как цвет, шрифт и GC."
+  },
+  "src/gui/label.hpp": {
+    "modified_time": "2025-02-16 23:15:42 +0400",
+    "hash": "c72df2b1965aa4d137dd82f09df287d61a1cf052681e856e52fc8a3bdd536f32",
+    "description": "Файл `label.hpp` содержит класс `Label`, который является наследником класса `BufferedComponent`. Основные атрибуты класса: `x_`, `y_`, `text_`, `font_`, `color_`. Конструктор принимает параметры для инициализации компонента, такие как текст, шрифт и цвет. Метод `setText` устанавливает новый текст для отображения на метке и вызывает `invalidateBuffer` для обновления буфера. Метод `drawOnBuffer` отвечает за отрисовку текста на буфере."
+  },
+  "src/gui/visible_component.hpp": {
+    "modified_time": "2025-02-16 16:10:44 +0400",
+    "hash": "dec99b490fefb17b66e1db1b7e73c2007494f535415e64475102426c2f0d7a74",
+    "description": "Файл `visible_component.hpp` содержит класс `VisibleComponent`, который представляет видимый компонент интерфейса. Класс имеет конструктор для инициализации параметров компонента и виртуальный метод `draw`, который отвечает за отрисовку компонента на заданном drawable. Основные члены класса: `display_` (дисплей), `window_` (окно), `gc_` (графический контекст), `width_` и `height_` (ширина и высота компонента)."
   }
 }

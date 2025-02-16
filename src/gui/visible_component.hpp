@@ -10,7 +10,6 @@ public:
 
 	// Метод отрисовки на заданном drawable (например, на буфере)
 	virtual void draw(Drawable drawable) = 0;
-	virtual void handleEvent(XEvent& event) = 0; // Должен быть чисто виртуальным
 
 protected:
 	Display* display_;

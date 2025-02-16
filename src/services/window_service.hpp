@@ -11,50 +11,55 @@
 
 class WindowService : public IWindowService {
 public:
-	WindowService(std::shared_ptr<IRubyService> ruby_service);
-	void run() override;
+    WindowService(std::shared_ptr<IRubyService> ruby_service);
+    virtual ~WindowService() override;
+    void run() override;
 
-	Display* getDisplay() const;
-	Window getWindow() const;
+    // Геттеры для использования в AppModule
+    Display* getDisplay() const;
+    Window getWindow() const;
+    GC getGC() const;
 
-	// Метод для регистрации видимых компонентов (виджетов)
-	void addWidget(VisibleComponent* widget);
+    // Метод для регистрации видимых компонентов (виджетов)
+    void addWidget(VisibleComponent* widget);
 
-	// Новые методы для установки меток ввода и вывода Ruby-результата
-	void setInputLabel(Label* label);
-	void setResultLabel(Label* label);
+    // Новые методы для установки меток ввода и вывода Ruby-результата
+    void setInputLabel(std::unique_ptr<Label> label);
+    void setResultLabel(std::unique_ptr<Label> label);
 
 private:
-	struct DisplayDeleter {
-		void operator()(Display* d) { if (d) XCloseDisplay(d); }
-	};
-	
-	std::shared_ptr<IRubyService> ruby_service;
-	std::unique_ptr<Display, DisplayDeleter> display;
-	Window window;
-	GC gc;
-	int screen;
-	std::string text_buffer;
-	size_t text_length;
+    struct DisplayDeleter {
+        void operator()(Display* dpy) { if (dpy) XCloseDisplay(dpy); }
+    };
 
-	Visual* visual;
-	Colormap colormap;
-	XftFont* font;
-	XftColor* color;
-	XftDraw* draw;
+    std::shared_ptr<IRubyService> ruby_service;
+    std::unique_ptr<Display, DisplayDeleter> display;
+    Window window;
+    GC gc;
+    int screen;
+    int depth_;
+    std::string text_buffer;
+    size_t text_length;
+    Pixmap doubleBuffer_;
 
-	// Контейнер для видимых компонентов (виджетов)
-	std::vector<VisibleComponent*> widgets;
+    Visual* visual;
+    Colormap colormap;
+    XftFont* font;
+    XftColor* color;
+    XftDraw* draw;
 
-	// Метки для ввода и для вывода Ruby-результата
-	Label* inputLabel = nullptr;
-	Label* resultLabel = nullptr;
+    // Контейнер для видимых компонентов (виджетов)
+    std::vector<VisibleComponent*> widgets;
 
-	void create_window();
-	void setup_gc();
-	void setup_xft();
-	void main_loop(std::string& ruby_output);
-	void redraw(const std::string& ruby_output);
-	bool handle_key_press(XEvent& event, std::string& ruby_output);
-	void draw_at_pointer(const XEvent& event);
+    // Метки для ввода и для вывода Ruby-результата
+    std::unique_ptr<Label> inputLabel;
+    std::unique_ptr<Label> resultLabel;
+
+    void create_window();
+    void setup_gc();
+    void setup_xft();
+    void main_loop(std::string& ruby_output);
+    void redraw(const std::string& ruby_output);
+    bool handle_key_press(XEvent& event, std::string& ruby_output);
+    void draw_at_pointer(const XEvent& event);
 };
